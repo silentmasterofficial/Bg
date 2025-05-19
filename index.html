@@ -1,8 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>User Panel - BG Remover</title>
+  <meta charset="UTF-8">
+  <title>VIP Pro BG Remover - User Panel</title>
   <style>
     body { background:#121212; color:#fff; font-family: Arial, sans-serif; display: flex; justify-content: center; padding: 30px; }
     .container { width: 400px; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 0 15px #00ff99; }
@@ -30,10 +29,18 @@
     .key-section button {
       width: auto; margin-left: 10px; padding: 10px 20px;
     }
-    #keyMessage { margin-top: 10px; font-size: 14px; min-height: 18px; }
-    #loading { text-align: center; margin-bottom: 10px; font-style: italic; display: none; }
-    .buy-info { margin-top: 10px; font-size: 14px; color: #ccc; }
-    .buy-info span { color: #00ff99; font-weight: bold; }
+    #keyMessage {
+      margin-top: 10px; font-size: 14px; min-height: 18px;
+    }
+    #loading {
+      text-align: center; margin-bottom: 10px; font-style: italic; display: none;
+    }
+    .buy-info {
+      margin-top: 10px; font-size: 14px; color: #ccc;
+    }
+    .buy-info span {
+      color: #00ff99; font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -44,20 +51,14 @@
     <input type="file" id="fileUpload" accept="image/*" />
     <div id="preview"></div>
     <div id="loading">Processing... Please wait.</div>
-    <button id="removeBtn" disabled>Remove Background & Download</button>
+    <button id="removeBtn" disabled>Remove Background & Download</button><div class="key-section">
+  <input type="text" id="keyInput" placeholder="Enter Access Key" autocomplete="off" />
+  <button id="applyKeyBtn">Apply Key</button>
+  <div id="keyMessage"></div>
+  <div class="buy-info">Buy Key via WhatsApp: <span>+923319234418</span></div>
+</div>
 
-    <div class="key-section">
-      <input type="text" id="keyInput" placeholder="Enter Access Key" />
-      <button id="applyKeyBtn">Apply Key</button>
-      <div id="keyMessage"></div>
-      <div class="buy-info">Buy Key via WhatsApp: <span>+923319234418</span></div>
-    </div>
-  </div>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-    import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
-
+  </div>  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>  <script>
     const firebaseConfig = {
       apiKey: "AIzaSyC14VjV9H-sXGWpKF7zWcTvNaOfTpVs9mw",
       authDomain: "bg-remover-1699f.firebaseapp.com",
@@ -69,11 +70,8 @@
       measurementId: "G-3PQ5FVBW3X"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    const storageKey = "vipUserCredits";
-    let userCredits = parseInt(localStorage.getItem(storageKey)) || 0;
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
     const creditsDisplay = document.getElementById("credits");
     const fileInput = document.getElementById("fileUpload");
@@ -85,73 +83,97 @@
     const loadingText = document.getElementById("loading");
 
     let selectedFile = null;
+    let userCredits = parseInt(localStorage.getItem("vipUserCredits")) || 0;
 
     function updateCreditsDisplay() {
       creditsDisplay.textContent = "Credits: " + userCredits;
     }
 
-    function saveUserCredits() {
-      localStorage.setItem(storageKey, userCredits);
+    function saveCredits() {
+      localStorage.setItem("vipUserCredits", userCredits);
     }
+
+    updateCreditsDisplay();
 
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
-      if (!file || !file.type.startsWith("image/")) return alert("Please upload a valid image.");
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        alert("Please upload an image file.");
+        return;
+      }
+
       selectedFile = file;
       const reader = new FileReader();
-      reader.onload = (evt) => {
-        preview.innerHTML = `<img src="${evt.target.result}" alt="Preview">`;
+      reader.onload = function(evt) {
+        preview.innerHTML = `<img src="${evt.target.result}" alt="Selected Image" />`;
         removeBtn.disabled = false;
+        keyMessage.textContent = "";
       };
       reader.readAsDataURL(file);
     });
 
-    applyKeyBtn.addEventListener("click", async () => {
+    applyKeyBtn.addEventListener("click", () => {
       const inputKey = keyInput.value.trim().toUpperCase();
-      if (!inputKey) return (keyMessage.textContent = "Please enter a key.");
-      const keysRef = ref(db, "keys");
-      const snapshot = await get(keysRef);
-      const keys = snapshot.val();
-
-      for (const id in keys) {
-        const k = keys[id];
-        if (k.key === inputKey) {
-          if (k.used) return (keyMessage.textContent = "Key already used.");
-          userCredits += k.credits;
-          saveUserCredits();
-          updateCreditsDisplay();
-          update(ref(db, `keys/${id}`), { used: true });
-          keyInput.value = "";
-          keyMessage.textContent = `Key applied! ${k.credits} credits added.`;
-          return;
-        }
+      if (!inputKey) {
+        keyMessage.style.color = "red";
+        keyMessage.textContent = "Please enter a key.";
+        return;
       }
 
-      keyMessage.textContent = "Invalid key.";
+      db.ref("keys/" + inputKey).once("value").then(snapshot => {
+        if (!snapshot.exists()) {
+          keyMessage.style.color = "red";
+          keyMessage.textContent = "Invalid key.";
+          return;
+        }
+
+        const keyData = snapshot.val();
+        if (keyData.used) {
+          keyMessage.style.color = "red";
+          keyMessage.textContent = "Key already used.";
+        } else {
+          userCredits += keyData.credits;
+          saveCredits();
+          updateCreditsDisplay();
+
+          db.ref("keys/" + inputKey).update({ used: true });
+
+          keyMessage.style.color = "green";
+          keyMessage.textContent = `Key applied! Added ${keyData.credits} credits.`;
+          keyInput.value = "";
+        }
+      });
     });
 
     removeBtn.addEventListener("click", async () => {
-      if (!selectedFile) return alert("Please upload an image.");
-      if (userCredits <= 0) return alert("No credits left. Please apply a valid key.");
+      if (!selectedFile) return alert("Please upload an image first.");
+      if (userCredits <= 0) {
+        alert("No credits left. Please apply a valid key.");
+        return;
+      }
 
       loadingText.style.display = "block";
       removeBtn.disabled = true;
+      applyKeyBtn.disabled = true;
 
       try {
         const formData = new FormData();
-        formData.append("image_file", selectedFile);
-        formData.append("size", "auto");
+        formData.append('image_file', selectedFile);
+        formData.append('size', 'auto');
 
-        const res = await fetch("https://api.remove.bg/v1.0/removebg", {
-          method: "POST",
-          headers: { "X-Api-Key": "AgQ8mHSvyz7ayHL5AjiK77Dt" },
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+          method: 'POST',
+          headers: { 'X-Api-Key': 'AgQ8mHSvyz7ayHL5AjiK77Dt' },
           body: formData
         });
 
-        if (!res.ok) throw new Error("Remove.bg error: " + res.statusText);
+        if (!response.ok) throw new Error("Remove.bg API error: " + response.statusText);
 
-        const blob = await res.blob();
+        const blob = await response.blob();
         const url = URL.createObjectURL(blob);
+
         const a = document.createElement("a");
         a.href = url;
         a.download = "bg_removed.png";
@@ -161,17 +183,18 @@
         URL.revokeObjectURL(url);
 
         userCredits--;
-        saveUserCredits();
+        saveCredits();
         updateCreditsDisplay();
+
+        alert("Background removed and image downloaded. Credit deducted.");
+
       } catch (err) {
         alert("Error: " + err.message);
       } finally {
         loadingText.style.display = "none";
         removeBtn.disabled = false;
+        applyKeyBtn.disabled = false;
       }
     });
-
-    updateCreditsDisplay();
-  </script>
-</body>
+  </script></body>
 </html>
