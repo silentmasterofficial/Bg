@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VIP Pro BG Remover - User Panel</title>
+  <title>User Panel - BG Remover</title>
   <style>
     body { background:#121212; color:#fff; font-family: Arial, sans-serif; display: flex; justify-content: center; padding: 30px; }
     .container { width: 400px; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 0 15px #00ff99; }
@@ -30,18 +30,10 @@
     .key-section button {
       width: auto; margin-left: 10px; padding: 10px 20px;
     }
-    #keyMessage {
-      margin-top: 10px; font-size: 14px; min-height: 18px;
-    }
-    #loading {
-      text-align: center; margin-bottom: 10px; font-style: italic; display: none;
-    }
-    .buy-info {
-      margin-top: 10px; font-size: 14px; color: #ccc;
-    }
-    .buy-info span {
-      color: #00ff99; font-weight: bold;
-    }
+    #keyMessage { margin-top: 10px; font-size: 14px; min-height: 18px; }
+    #loading { text-align: center; margin-bottom: 10px; font-style: italic; display: none; }
+    .buy-info { margin-top: 10px; font-size: 14px; color: #ccc; }
+    .buy-info span { color: #00ff99; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -55,19 +47,33 @@
     <button id="removeBtn" disabled>Remove Background & Download</button>
 
     <div class="key-section">
-      <input type="text" id="keyInput" placeholder="Enter Access Key" autocomplete="off" />
+      <input type="text" id="keyInput" placeholder="Enter Access Key" />
       <button id="applyKeyBtn">Apply Key</button>
       <div id="keyMessage"></div>
       <div class="buy-info">Buy Key via WhatsApp: <span>+923319234418</span></div>
     </div>
   </div>
 
-  <script>
-    const storageKey = "vipBgKeys";
-    let keys = JSON.parse(localStorage.getItem(storageKey)) || [];
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+    import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
 
-    const userCreditKey = "vipUserCredits";
-    let userCredits = parseInt(localStorage.getItem(userCreditKey)) || 0;
+    const firebaseConfig = {
+      apiKey: "AIzaSyC14VjV9H-sXGWpKF7zWcTvNaOfTpVs9mw",
+      authDomain: "bg-remover-1699f.firebaseapp.com",
+      databaseURL: "https://bg-remover-1699f-default-rtdb.firebaseio.com",
+      projectId: "bg-remover-1699f",
+      storageBucket: "bg-remover-1699f.appspot.com",
+      messagingSenderId: "562843649498",
+      appId: "1:562843649498:web:435a7caddf8059ace2ace3",
+      measurementId: "G-3PQ5FVBW3X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const storageKey = "vipUserCredits";
+    let userCredits = parseInt(localStorage.getItem(storageKey)) || 0;
 
     const creditsDisplay = document.getElementById("credits");
     const fileInput = document.getElementById("fileUpload");
@@ -85,94 +91,67 @@
     }
 
     function saveUserCredits() {
-      localStorage.setItem(userCreditKey, userCredits);
+      localStorage.setItem(storageKey, userCredits);
     }
 
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
-      if (!file) return;
-
-      if (!file.type.startsWith("image/")) {
-        alert("Please upload an image file.");
-        return;
-      }
-
+      if (!file || !file.type.startsWith("image/")) return alert("Please upload a valid image.");
       selectedFile = file;
       const reader = new FileReader();
-      reader.onload = function(evt) {
-        preview.innerHTML = `<img src="${evt.target.result}" alt="Selected Image" />`;
+      reader.onload = (evt) => {
+        preview.innerHTML = `<img src="${evt.target.result}" alt="Preview">`;
         removeBtn.disabled = false;
-        keyMessage.textContent = "";
       };
       reader.readAsDataURL(file);
     });
 
-    applyKeyBtn.addEventListener("click", () => {
+    applyKeyBtn.addEventListener("click", async () => {
       const inputKey = keyInput.value.trim().toUpperCase();
-      if (!inputKey) {
-        keyMessage.style.color = "red";
-        keyMessage.textContent = "Please enter a key.";
-        return;
+      if (!inputKey) return (keyMessage.textContent = "Please enter a key.");
+      const keysRef = ref(db, "keys");
+      const snapshot = await get(keysRef);
+      const keys = snapshot.val();
+
+      for (const id in keys) {
+        const k = keys[id];
+        if (k.key === inputKey) {
+          if (k.used) return (keyMessage.textContent = "Key already used.");
+          userCredits += k.credits;
+          saveUserCredits();
+          updateCreditsDisplay();
+          update(ref(db, `keys/${id}`), { used: true });
+          keyInput.value = "";
+          keyMessage.textContent = `Key applied! ${k.credits} credits added.`;
+          return;
+        }
       }
 
-      const keyObj = keys.find(k => k.key === inputKey);
-
-      if (!keyObj) {
-        keyMessage.style.color = "red";
-        keyMessage.textContent = "Invalid key.";
-        return;
-      }
-
-      if (keyObj.used) {
-        keyMessage.style.color = "red";
-        keyMessage.textContent = "Key already used.";
-        return;
-      }
-
-      userCredits += keyObj.credits;
-      saveUserCredits();
-
-      keyObj.used = true;
-      localStorage.setItem(storageKey, JSON.stringify(keys));
-
-      updateCreditsDisplay();
-      keyMessage.style.color = "green";
-      keyMessage.textContent = `Key applied! Added ${keyObj.credits} credits.`;
-
-      keyInput.value = "";
+      keyMessage.textContent = "Invalid key.";
     });
 
     removeBtn.addEventListener("click", async () => {
-      if (!selectedFile) return alert("Please upload an image first.");
-      if (userCredits <= 0) {
-        alert("No credits left. Please apply a valid key.");
-        return;
-      }
+      if (!selectedFile) return alert("Please upload an image.");
+      if (userCredits <= 0) return alert("No credits left. Please apply a valid key.");
 
       loadingText.style.display = "block";
       removeBtn.disabled = true;
-      applyKeyBtn.disabled = true;
 
       try {
         const formData = new FormData();
-        formData.append('image_file', selectedFile);
-        formData.append('size', 'auto');
+        formData.append("image_file", selectedFile);
+        formData.append("size", "auto");
 
-        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-          method: 'POST',
-          headers: {
-            'X-Api-Key': 'AgQ8mHSvyz7ayHL5AjiK77Dt'
-          },
+        const res = await fetch("https://api.remove.bg/v1.0/removebg", {
+          method: "POST",
+          headers: { "X-Api-Key": "AgQ8mHSvyz7ayHL5AjiK77Dt" },
           body: formData
         });
 
-        if (!response.ok) {
-          throw new Error("Remove.bg API error: " + response.statusText);
-        }
+        if (!res.ok) throw new Error("Remove.bg error: " + res.statusText);
 
-        const blob = await response.blob();
+        const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-
         const a = document.createElement("a");
         a.href = url;
         a.download = "bg_removed.png";
@@ -184,15 +163,11 @@
         userCredits--;
         saveUserCredits();
         updateCreditsDisplay();
-
-        alert("Background removed and image downloaded. Credit deducted.");
-
       } catch (err) {
         alert("Error: " + err.message);
       } finally {
         loadingText.style.display = "none";
         removeBtn.disabled = false;
-        applyKeyBtn.disabled = false;
       }
     });
 
